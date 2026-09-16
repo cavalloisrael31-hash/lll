@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SMPL-X × FLAME 面部表情演示</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin:0; width:100%; height:100%; overflow:hidden; background:#090b13; color:#e8eaf2; font-family:"Microsoft YaHei UI",system-ui,sans-serif; }
+  #app { display:flex; width:100vw; height:100vh; }
+  #stage { flex:1; position:relative; min-width:0; background:radial-gradient(ellipse at 52% 35%,#273754 0%,#111827 42%,#090b13 78%); }
+  canvas { width:100%; height:100%; display:block; cursor:grab; } canvas:active { cursor:grabbing; }
+  aside { width:370px; overflow-y:auto; padding:18px; border-left:1px solid #ffffff15; background:linear-gradient(#121723,#0d111b); }
+  h1 { margin:0 0 8px; font-size:18px; color:#fff; } h1::before { content:""; display:inline-block; width:4px; height:18px; margin-right:9px; border-radius:2px; vertical-align:-3px; background:#74b9ff; }
+  section { margin:13px 0; padding:12px; border:1px solid #ffffff12; border-radius:10px; background:#ffffff05; }
+  section h2 { margin:0 0 9px; font-size:13px; color:#cfe4ff; }
+  .load { display:grid; gap:8px; }
+  label.file { display:block; padding:9px; border:1px dashed #77b8ff78; border-radius:7px; color:#a9d3ff; cursor:pointer; font-size:12px; transition:.15s; }
+  label.file:hover { background:#6daef01b; } label.file.loaded { border-style:solid; border-color:#77d59278; color:#9ce5b1; background:#3fbc5b12; }
+  input[type=file] { display:none; }
+  .expression-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  button { min-height:36px; padding:7px 8px; cursor:pointer; color:#dbeafe; border:1px solid #72b7ff62; border-radius:7px; background:#407cb21c; font:600 12px inherit; transition:.15s; }
+  button:hover { background:#478dd63d; color:#fff; } button.active { border-color:#9ccfff; background:#3c8ed963; color:#fff; box-shadow:0 0 0 1px #ffffff14 inset; }
+  button:disabled { cursor:not-allowed; opacity:.45; }
+  .animation-actions { display:flex; gap:8px; margin-top:12px; } .animation-actions button { flex:1; }
+  .action-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; } .action-row select { width:100%; padding:7px; color:#dbeafe; border:1px solid #72b7ff62; border-radius:7px; background:#111827; font:12px inherit; }
+  #action-status { margin-top:8px; color:#9fc9ee; font-size:11px; text-align:center; }
+  #render-button { border-color:#91d6a8; background:#2f8c4a37; } #render-button:hover { background:#3fa75a55; }
+  .range-row { display:flex; align-items:center; gap:9px; font-size:12px; color:#c8d2e2; }
+  #chat-panel { position:fixed; z-index:6; left:50%; bottom:22px; transform:translateX(-50%); width:min(560px,calc(100vw - 420px)); padding:11px; border:1px solid #72b7ff42; border-radius:12px; background:#0d1426e8; box-shadow:0 12px 36px #0008; backdrop-filter:blur(12px); }
+  #chat-panel h2 { margin:0 0 8px; font-size:13px; color:#cfe4ff; }
+  .chat-log { max-height:150px; overflow-y:auto; display:flex; flex-direction:column; gap:7px; padding:2px 1px 9px; }
+  .chat-message { max-width:88%; padding:7px 9px; border-radius:9px; line-height:1.45; font-size:12px; white-space:pre-wrap; word-break:break-word; }
+  .chat-message.user { align-self:flex-end; background:#337cb8; color:#fff; } .chat-message.ai { align-self:flex-start; background:#ffffff14; color:#e3edf9; }
+  .voice-row { display:flex; gap:8px; } .voice-row input { min-width:0; flex:1; padding:9px; color:#e8eaf2; border:1px solid #72b7ff62; border-radius:7px; background:#0a0f19; font:13px inherit; }
+  .chat-actions { display:flex; gap:8px; margin-top:8px; } .chat-actions button { flex:1; }
+  #record-button.recording { border-color:#ff8d8d; color:#ffe3e3; background:#bd3f4e66; }
+  @media (max-width:760px) { aside { width:300px; } #chat-panel { width:calc(100vw - 28px); bottom:14px; } }
+  body.embed aside, body.embed #chat-panel { display:none; } body.embed #stage { width:100vw; } body.embed #app { width:100vw; }
+  #voice-status { margin-top:8px; min-height:16px; color:#9fc9ee; font-size:12px; }
+  input[type=range] { flex:1; accent-color:#7cc1ff; } #strength-value { width:36px; text-align:right; color:#8fc8ff; font:11px ui-monospace,monospace; }
+  #loading { position:fixed; inset:0; z-index:10; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:12px; background:#090b13e8; transition:opacity .2s; }
+  #loading.hidden { opacity:0; pointer-events:none; } .spin { width:33px; height:33px; border:3px solid #74b9ff2f; border-top-color:#74b9ff; border-radius:50%; animation:spin .8s linear infinite; } @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="loading"><div class="spin"></div><div id="loading-text">初始化 WebGL…</div></div>
+<div id="app">
+  <main id="stage"><canvas id="glcanvas"></canvas></main>
+  <aside id="ui-root" aria-label="数字人控制面板"></aside>
+</div>
+<div id="chat-ui-root"></div>
+<script src="./ui.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gl-matrix@3.4.3/gl-matrix-min.js"></script>
+<script src="./face_expression_viewer.js"></script>
+</body>
+</html>
